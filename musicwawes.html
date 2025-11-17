@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Art performance</title>
+  <style>
+    body { margin: 0; background: black; }
+    canvas { width: 100vw; height: 100vh; display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="hydra-canvas"></canvas>
+
+  <!-- hydra -->
+  <script src="https://unpkg.com/hydra-synth"></script>
+  <script>
+    const hydra = new Hydra({
+      canvas: document.getElementById("hydra-canvas"),
+    })
+
+    // стартовые параметры
+    let currentR = 0.3
+    let currentG = 0.3
+    let currentB = 0.3
+    let targetR = 0.3
+    let targetG = 0.3
+    let targetB = 0.3
+
+    let currentFreq = 20
+    let targetFreq = 20
+
+    // подключаем микрофон
+    let audioCtx, analyser, dataArray
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      .then((stream) => {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+        const source = audioCtx.createMediaStreamSource(stream)
+        analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 256
+        const bufferLength = analyser.frequencyBinCount
+        dataArray = new Uint8Array(bufferLength)
+        source.connect(analyser)
+        animateAudio()
+      })
+
+    function animateAudio() {
+      requestAnimationFrame(animateAudio)
+      if (!analyser) return
+      analyser.getByteFrequencyData(dataArray)
+
+      // считаем среднюю громкость
+      let sum = 0
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i]
+      }
+      const avg = sum / dataArray.length / 255 // нормализация 0..1
+
+      // меняем параметры от громкости
+      targetFreq = 10 + avg * 100    // от 10 до 110
+      targetR = avg
+      targetG = Math.random() * avg
+      targetB = 1 - avg
+    }
+
+    // плавное приближение
+    setInterval(() => {
+      const smooth = 0.05
+      currentR += (targetR - currentR) * smooth
+      currentG += (targetG - currentG) * smooth
+      currentB += (targetB - currentB) * smooth
+      currentFreq += (targetFreq - currentFreq) * 0.05
+    }, 30)
+
+    function limit(val, min=0.1, max=0.9) {
+      return Math.min(Math.max(val, min), max)
+    }
+
+    // hydra картинка
+    osc(
+      () => currentFreq,
+      () => 0.1,
+      () => 2
+    )
+      .modulate(noise(3, 0.2))
+      .color(
+        () => limit(currentR),
+        () => limit(currentG),
+        () => limit(currentB)
+      )
+      .out()
+  </script>
+</body>
+</html>
